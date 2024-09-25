@@ -1,0 +1,511 @@
+
+
+
+
+CREATE TABLE booking (
+    bookingid               NUMBER NOT NULL,
+    bookingdate             DATE NOT NULL,
+    status                  VARCHAR2(15) NOT NULL,
+    passenger_passengerid   NUMBER
+);
+
+ALTER TABLE booking ADD CONSTRAINT booking_pk PRIMARY KEY ( bookingid );
+
+CREATE TABLE cargo (
+    cargoid         NUMBER NOT NULL,
+    weight          VARCHAR2(100),
+    destination     VARCHAR2(100),
+    train_trainid   NUMBER
+);
+
+ALTER TABLE cargo ADD CONSTRAINT cargo_pk PRIMARY KEY ( cargoid );
+
+CREATE TABLE department (
+    departmentid     NUMBER NOT NULL,
+    departmentname   VARCHAR2(100) NOT NULL
+);
+
+ALTER TABLE department ADD CONSTRAINT department_pk PRIMARY KEY ( departmentid );
+
+CREATE TABLE employee (
+    employeeid                NUMBER NOT NULL,
+    name                      VARCHAR2(50) NOT NULL,
+    role                      VARCHAR2(20) NOT NULL,
+    department_departmentid   NUMBER
+);
+
+ALTER TABLE employee ADD CONSTRAINT employee_pk PRIMARY KEY ( employeeid );
+
+CREATE TABLE passenger (
+    passengerid      NUMBER NOT NULL,
+    passenger_name   VARCHAR2(50) NOT NULL,
+    age              NUMBER NOT NULL,
+    gender           VARCHAR2(8) NOT NULL,
+    contact_phone    NUMBER,
+    email            VARCHAR2(50)
+);
+
+ALTER TABLE passenger ADD CONSTRAINT passenger_pk PRIMARY KEY ( passengerid );
+
+CREATE TABLE relation_5 (
+    train_trainid   NUMBER NOT NULL,
+    route_routeid   NUMBER NOT NULL
+);
+
+ALTER TABLE relation_5 ADD CONSTRAINT relation_5_pk PRIMARY KEY ( train_trainid,
+                                                                  route_routeid );
+
+CREATE TABLE relation_7 (
+    station_stationid   NUMBER NOT NULL,
+    route_routeid       NUMBER NOT NULL
+);
+
+ALTER TABLE relation_7 ADD CONSTRAINT relation_7_pk PRIMARY KEY ( station_stationid,
+                                                                  route_routeid );
+
+CREATE TABLE relation_8 (
+    schedule_scheduleid   NUMBER NOT NULL,
+    station_stationid     NUMBER NOT NULL
+);
+
+ALTER TABLE relation_8 ADD CONSTRAINT relation_8_pk PRIMARY KEY ( schedule_scheduleid,
+                                                                  station_stationid );
+
+CREATE TABLE relation_9 (
+    employee_employeeid   NUMBER NOT NULL,
+    train_trainid         NUMBER NOT NULL
+);
+
+ALTER TABLE relation_9 ADD CONSTRAINT relation_9_pk PRIMARY KEY ( employee_employeeid,
+                                                                  train_trainid );
+
+CREATE TABLE route (
+    routeid            NUMBER NOT NULL,
+    routename          VARCHAR2(50) NOT NULL,
+    starting_station   VARCHAR2(50) NOT NULL,
+    ending_station     VARCHAR2(50) NOT NULL
+);
+CREATE SEQUENCE Booking_ID
+  START WITH 10000000   -- Start from 8 digits
+  INCREMENT BY 1        -- Increment by 1 each time
+ ;             
+
+
+ALTER TABLE route ADD CONSTRAINT route_pk PRIMARY KEY ( routeid );
+
+CREATE TABLE schedule (
+    scheduleid      NUMBER NOT NULL,
+    arrivaltime     DATE NOT NULL,
+    departuretime   DATE NOT NULL,
+    train_trainid   NUMBER
+);
+
+ALTER TABLE schedule ADD CONSTRAINT schedule_pk PRIMARY KEY ( scheduleid );
+
+CREATE TABLE station (
+    stationid      NUMBER NOT NULL,
+    station_name   VARCHAR2(50) NOT NULL,
+    location       VARCHAR2(50) NOT NULL
+);
+
+ALTER TABLE station ADD CONSTRAINT station_pk PRIMARY KEY ( stationid );
+
+CREATE TABLE ticket (
+    ticketid            NUMBER NOT NULL,
+    seat_number         VARCHAR2(50) NOT NULL,
+    price               NUMBER(2) NOT NULL,
+    travel_date         TIMESTAMP WITH LOCAL TIME ZONE NOT NULL,
+    booking_bookingid   NUMBER,
+    train_trainid       NUMBER
+);
+
+ALTER TABLE ticket ADD CONSTRAINT ticket_pk PRIMARY KEY ( ticketid );
+
+CREATE TABLE train (
+    trainid     NUMBER NOT NULL,
+    trainname   VARCHAR2(25) NOT NULL,
+    capacity    NUMBER NOT NULL,
+    traintype   VARCHAR2(15) NOT NULL
+);
+
+ALTER TABLE train ADD CONSTRAINT train_pk PRIMARY KEY ( trainid );
+
+ALTER TABLE booking
+    ADD CONSTRAINT booking_passenger_fk FOREIGN KEY ( passenger_passengerid )
+        REFERENCES passenger ( passengerid );
+
+ALTER TABLE cargo
+    ADD CONSTRAINT cargo_train_fk FOREIGN KEY ( train_trainid )
+        REFERENCES train ( trainid );
+
+ALTER TABLE employee
+    ADD CONSTRAINT employee_department_fk FOREIGN KEY ( department_departmentid )
+        REFERENCES department ( departmentid );
+
+ALTER TABLE relation_5
+    ADD CONSTRAINT relation_5_route_fk FOREIGN KEY ( route_routeid )
+        REFERENCES route ( routeid );
+
+ALTER TABLE relation_5
+    ADD CONSTRAINT relation_5_train_fk FOREIGN KEY ( train_trainid )
+        REFERENCES train ( trainid );
+
+ALTER TABLE relation_7
+    ADD CONSTRAINT relation_7_route_fk FOREIGN KEY ( route_routeid )
+        REFERENCES route ( routeid );
+
+ALTER TABLE relation_7
+    ADD CONSTRAINT relation_7_station_fk FOREIGN KEY ( station_stationid )
+        REFERENCES station ( stationid );
+
+ALTER TABLE relation_8
+    ADD CONSTRAINT relation_8_schedule_fk FOREIGN KEY ( schedule_scheduleid )
+        REFERENCES schedule ( scheduleid );
+
+ALTER TABLE relation_8
+    ADD CONSTRAINT relation_8_station_fk FOREIGN KEY ( station_stationid )
+        REFERENCES station ( stationid );
+
+ALTER TABLE relation_9
+    ADD CONSTRAINT relation_9_employee_fk FOREIGN KEY ( employee_employeeid )
+        REFERENCES employee ( employeeid );
+
+ALTER TABLE relation_9
+    ADD CONSTRAINT relation_9_train_fk FOREIGN KEY ( train_trainid )
+        REFERENCES train ( trainid );
+
+ALTER TABLE schedule
+    ADD CONSTRAINT schedule_train_fk FOREIGN KEY ( train_trainid )
+        REFERENCES train ( trainid );
+
+ALTER TABLE ticket
+    ADD CONSTRAINT ticket_booking_fk FOREIGN KEY ( booking_bookingid )
+        REFERENCES booking ( bookingid );
+
+ALTER TABLE ticket
+    ADD CONSTRAINT ticket_train_fk FOREIGN KEY ( train_trainid )
+        REFERENCES train ( trainid );
+
+
+CREATE OR REPLACE TRIGGER trg_adjust_train_capacity
+AFTER INSERT OR DELETE ON cargo
+FOR EACH ROW
+DECLARE
+    v_train_capacity NUMBER;
+BEGIN
+    IF INSERTING THEN
+        -- Get current train capacity
+        SELECT capacity INTO v_train_capacity FROM train WHERE trainid = :NEW.train_trainid;
+        -- Update the train capacity
+        UPDATE train SET capacity = v_train_capacity - :NEW.weight WHERE trainid = :NEW.train_trainid;
+    ELSIF DELETING THEN
+        -- Get current train capacity
+        SELECT capacity INTO v_train_capacity FROM train WHERE trainid = :OLD.train_trainid;
+        -- Update the train capacity
+        UPDATE train SET capacity = v_train_capacity + :OLD.weight WHERE trainid = :OLD.train_trainid;
+    END IF;
+END;
+/
+
+
+CREATE OR REPLACE TRIGGER trg_update_booking_status
+AFTER UPDATE OR INSERT ON ticket
+FOR EACH ROW
+BEGIN
+    IF :NEW.travel_date < SYSDATE THEN
+        UPDATE booking
+        SET status = 'Completed'
+        WHERE bookingid = :NEW.booking_bookingid;
+    END IF;
+END;
+/
+
+CREATE OR REPLACE TRIGGER trg_check_employee_department
+BEFORE INSERT OR UPDATE ON employee
+FOR EACH ROW
+BEGIN
+    IF :NEW.department_departmentid IS NULL THEN
+        RAISE_APPLICATION_ERROR(-20002, 'Employee must be assigned to a department.');
+    END IF;
+END;
+/
+CREATE OR REPLACE TRIGGER trg_prevent_duplicate_booking
+BEFORE INSERT OR UPDATE ON ticket
+FOR EACH ROW
+DECLARE
+    v_count NUMBER;
+BEGIN
+    SELECT COUNT(*)
+    INTO v_count
+    FROM ticket t
+    JOIN booking b ON t.booking_bookingid = b.bookingid
+    WHERE b.passenger_passengerid = :NEW.booking_bookingid
+      AND t.train_trainid = :NEW.train_trainid
+      AND t.travel_date = :NEW.travel_date;
+
+    IF v_count > 0 THEN
+        RAISE_APPLICATION_ERROR(-20003, 'Passenger already has a booking for this train and travel date.');
+    END IF;
+END;
+/
+
+CREATE OR REPLACE TRIGGER trg_update_train_seat_availability
+AFTER INSERT OR DELETE ON ticket
+FOR EACH ROW
+DECLARE
+    v_train_capacity NUMBER;
+BEGIN
+    IF INSERTING THEN
+        -- Reduce seat availability when a ticket is booked
+        UPDATE train SET capacity = capacity - 1 WHERE trainid = :NEW.train_trainid;
+    ELSIF DELETING THEN
+        -- Increase seat availability when a ticket is canceled
+        UPDATE train SET capacity = capacity + 1 WHERE trainid = :OLD.train_trainid;
+    END IF;
+END;
+/
+
+CREATE TABLE status (
+    status_id   NUMBER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    status_name VARCHAR2(50) NOT NULL
+);
+
+INSERT INTO status (status_name) VALUES ('Pending');
+INSERT INTO status (status_name) VALUES ('Approved');
+INSERT INTO status (status_name) VALUES ('Cancelled');
+INSERT INTO status (status_name) VALUES ('Completed');
+INSERT INTO status (status_name) VALUES ('On Hold');
+
+CREATE SEQUENCE Booking_ID
+  START WITH 10000000   -- Start from 8 digits
+  INCREMENT BY 1        -- Increment by 1 each time
+ ;      
+
+
+CREATE TABLE TRAIN_TYPE (
+    TRAIN_TYPE_ID INT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    TRAIN_TYPE_NAME VARCHAR(100) NOT NULL
+);
+
+INSERT INTO TRAIN_TYPE (TRAIN_TYPE_NAME)
+VALUES 
+('Passenger');
+
+INSERT INTO TRAIN_TYPE (TRAIN_TYPE_NAME)
+VALUES 
+('Cargo');
+
+
+CREATE SEQUENCE Train_ID
+  START WITH 1005   -- Start from 8 digits
+  INCREMENT BY 1        -- Increment by 1 each time
+ ;  
+
+ CREATE TABLE Gender (
+    Gender_ID INT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    Gender_Name VARCHAR(50) NOT NULL
+);
+INSERT INTO Gender (Gender_Name)
+VALUES
+('Male');
+
+INSERT INTO Gender (Gender_Name)
+VALUES
+('Female');
+
+
+
+
+
+
+
+
+
+
+
+CREATE SEQUENCE PASSENGER_ID
+  START WITH 10000   -- Start from 8 digits
+  INCREMENT BY 1        -- Increment by 1 each time
+ ;   
+
+
+CREATE SEQUENCE CARGO_ID
+  START WITH 50000   -- Start from 8 digits
+  INCREMENT BY 1        -- Increment by 1 each time
+ ;   
+
+
+
+
+ CREATE SEQUENCE DEPARTMENT_ID
+  START WITH 60000   -- Start from 8 digits
+  INCREMENT BY 1        -- Increment by 1 each time
+ ;   
+
+
+
+
+ CREATE TABLE railway_departments (
+    department_id NUMBER GENERATED BY DEFAULT AS IDENTITY,
+    department_name VARCHAR2(100) NOT NULL,
+    PRIMARY KEY (department_id)
+);
+INSERT INTO railway_departments (department_name) VALUES ('Operations Department');
+INSERT INTO railway_departments (department_name) VALUES ('Civil Engineering Department');
+INSERT INTO railway_departments (department_name) VALUES ('Mechanical Engineering Department');
+INSERT INTO railway_departments (department_name) VALUES ('Electrical Engineering Department');
+INSERT INTO railway_departments (department_name) VALUES ('Signal and Telecommunications Department');
+INSERT INTO railway_departments (department_name) VALUES ('Traffic Department');
+INSERT INTO railway_departments (department_name) VALUES ('Accounts and Finance Department');
+INSERT INTO railway_departments (department_name) VALUES ('Personnel and Human Resources Department');
+INSERT INTO railway_departments (department_name) VALUES ('Safety Department');
+INSERT INTO railway_departments (department_name) VALUES ('Stores Department');
+INSERT INTO railway_departments (department_name) VALUES ('Medical Department');
+INSERT INTO railway_departments (department_name) VALUES ('Security Department');
+INSERT INTO railway_departments (department_name) VALUES ('Planning and Research Department');
+INSERT INTO railway_departments (department_name) VALUES ('Legal Department');
+INSERT INTO railway_departments (department_name) VALUES ('Public Relations Department');
+
+
+CREATE TABLE employee_roles (
+    role_id NUMBER GENERATED BY DEFAULT AS IDENTITY,
+    role_name VARCHAR2(100) NOT NULL,
+    PRIMARY KEY (role_id)
+);
+INSERT INTO employee_roles (role_name) VALUES ('Train Operator');
+INSERT INTO employee_roles (role_name) VALUES ('Station Manager');
+INSERT INTO employee_roles (role_name) VALUES ('Track Inspector');
+INSERT INTO employee_roles (role_name) VALUES ('Signal Technician');
+INSERT INTO employee_roles (role_name) VALUES ('Ticket Collector');
+INSERT INTO employee_roles (role_name) VALUES ('Administrative Officer');
+INSERT INTO employee_roles (role_name) VALUES ('Mechanical Engineer');
+INSERT INTO employee_roles (role_name) VALUES ('Safety Inspector');
+INSERT INTO employee_roles (role_name) VALUES ('Accounts Manager');
+INSERT INTO employee_roles (role_name) VALUES ('Security Officer');
+INSERT INTO employee_roles (role_name) VALUES ('Commercial Officer');
+INSERT INTO employee_roles (role_name) VALUES ('Public Relations Officer');
+
+
+CREATE SEQUENCE EMPLOYEE_ID
+  START WITH 70000   -- Start from 8 digits
+  INCREMENT BY 1        -- Increment by 1 each time
+ ;   
+
+
+CREATE SEQUENCE EMPLOYEE_ID
+  START WITH 70000   -- Start from 8 digits
+  INCREMENT BY 1        -- Increment by 1 each time
+ ;   
+ CREATE SEQUENCE STATION_ID
+  START WITH 80000   -- Start from 8 digits
+  INCREMENT BY 1        -- Increment by 1 each time
+ ;   
+
+ CREATE TABLE railway_stations (
+    station_id NUMBER GENERATED BY DEFAULT AS IDENTITY,
+    station_name VARCHAR2(100) NOT NULL,
+    PRIMARY KEY (station_id)
+);
+INSERT INTO railway_stations (station_name) VALUES ('Dhaka Railway Station');
+INSERT INTO railway_stations (station_name) VALUES ('Chittagong Railway Station');
+INSERT INTO railway_stations (station_name) VALUES ('Sylhet Railway Station');
+INSERT INTO railway_stations (station_name) VALUES ('Rajshahi Railway Station');
+INSERT INTO railway_stations (station_name) VALUES ('Khulna Railway Station');
+INSERT INTO railway_stations (station_name) VALUES ('Jessore Railway Station');
+INSERT INTO railway_stations (station_name) VALUES ('Mymensingh Railway Station');
+INSERT INTO railway_stations (station_name) VALUES ('Comilla Railway Station');
+INSERT INTO railway_stations (station_name) VALUES ('Narayanganj Railway Station');
+INSERT INTO railway_stations (station_name) VALUES ('Rangpur Railway Station');
+INSERT INTO railway_stations (station_name) VALUES ('Bogra Railway Station');
+INSERT INTO railway_stations (station_name) VALUES ('Tangail Railway Station');
+INSERT INTO railway_stations (station_name) VALUES ('Panchagarh Railway Station');
+INSERT INTO railway_stations (station_name) VALUES ('Dinajpur Railway Station');
+INSERT INTO railway_stations (station_name) VALUES ('Brahmanbaria Railway Station');
+INSERT INTO railway_stations (station_name) VALUES ('Noakhali Railway Station');
+INSERT INTO railway_stations (station_name) VALUES ('Lalmonirhat Railway Station');
+INSERT INTO railway_stations (station_name) VALUES ('Sirajganj Railway Station');
+INSERT INTO railway_stations (station_name) VALUES ('Ishwardi Railway Junction');
+
+
+CREATE TABLE user_signup (
+    user_id NUMBER primary key,
+    full_name VARCHAR2(100) NOT NULL,
+    email VARCHAR2(100) NOT NULL UNIQUE,
+    password VARCHAR2(100) NOT NULL,
+    phone_number VARCHAR2(15),
+    date_of_birth DATE,
+    gender VARCHAR2(10),
+    address VARCHAR2(200),
+    signup_date DATE DEFAULT SYSDATE
+    
+);
+CREATE SEQUENCE USER_ID
+  START WITH 1  -- Start from 8 digits
+  INCREMENT BY 1        -- Increment by 1 each time
+ ;  
+
+create or replace TRIGGER trg_ticket_booking
+BEFORE INSERT ON ticket
+FOR EACH ROW
+BEGIN
+    IF :NEW.booking_bookingid IS NULL THEN
+        RAISE_APPLICATION_ERROR(-20001, 'Booking ID must be provided for ticket booking.');
+    END IF;
+END;
+/
+
+create or replace TRIGGER trg_booking_with_ticket_connections
+BEFORE INSERT ON booking
+FOR EACH ROW
+DECLARE
+    v_ticket_count NUMBER;
+BEGIN
+    SELECT COUNT(*)
+    INTO v_ticket_count
+    FROM ticket
+    WHERE booking_bookingid = :NEW.bookingid;
+
+    IF v_ticket_count = 0 THEN
+        RAISE_APPLICATION_ERROR(-20004, 'Booking must have at least one associated ticket.');
+    END IF;
+END;
+/
+
+CREATE TABLE TrainSeats (
+    id INT PRIMARY KEY,
+    seat_name VARCHAR(50) NOT NULL
+  
+);
+
+INSERT INTO TrainSeats (id, seat_name) VALUES
+(1, 'Shovon Chair'),
+INSERT INTO TrainSeats (id, seat_name) VALUES(2, 'Shovon');
+INSERT INTO TrainSeats (id, seat_name) VALUES(3, 'First Class AC');
+
+INSERT INTO TrainSeats (id, seat_name) VALUES(4, 'Second Class AC');
+
+INSERT INTO TrainSeats (id, seat_name) VALUES(5, 'Sleeper Coach');
+
+INSERT INTO TrainSeats (id, seat_name) VALUES(6, 'Business Class');
+
+INSERT INTO TrainSeats (id, seat_name) VALUES(7, 'General Seat');
+
+INSERT INTO TrainSeats (id, seat_name) VALUES(8, 'Compartment');
+
+INSERT INTO TrainSeats (id, seat_name) VALUES(9, 'Couple Seat');
+
+INSERT INTO TrainSeats (id, seat_name) VALUES(10, 'Luxury Coach');
+
+create or replace TRIGGER trg_user_ticket_purchase
+AFTER INSERT ON ticket
+FOR EACH ROW
+DECLARE
+    v_user_name VARCHAR2(100);
+BEGIN
+    SELECT full_name INTO v_user_name
+    FROM user_signup
+    WHERE user_id = :NEW.booking_bookingid;  -- Assuming booking_bookingid relates to user_id
+
+    DBMS_OUTPUT.PUT_LINE('User ' || v_user_name || ' has purchased a ticket with ID ' || :NEW.ticketid);
+END;
+/
