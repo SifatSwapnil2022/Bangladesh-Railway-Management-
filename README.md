@@ -2,7 +2,7 @@
 # Bangladesh-Railway-Management-System
 Bangladesh Railway Management System (BDRMS) is a comprehensive software solution designed to enhance the efficiency, safety, and reliability of railway operations.
 Key Features:
-Scheduling and Timetable Management: RMS helps in creating and managing train schedules, ensuring optimal utilization of resources while minimizing delays.
+Scheduling and Timetable Management system: RMS helps in creating and managing train schedules, ensuring optimal utilization of resources while minimizing delays.
 
 Ticketing and Reservations: The system facilitates online ticket booking, cancellations, and modifications, providing a seamless experience for passengers.
 
